@@ -25,6 +25,7 @@ GENERATOR = 3
 PRIME = 11
 ORDER = 5
 KEY = 3
+global SHARED_DIFFIE_KEY
 SHARED_DIFFIE_KEY = 0
 
 # Sets up and binds the server that listens for chats from the client
@@ -60,6 +61,8 @@ def connect(addr):
 # Handles incoming messages from the client through 
 # (conn, addr) = server.accept().
 def handle_client(conn, addr):
+    global SHARED_DIFFIE_KEY
+    global IM_ACTIVE
     print(f"[NEW CONNECTION] {addr} connected to client.")
 
     connected = True
@@ -77,8 +80,6 @@ def handle_client(conn, addr):
         #     connected = False
         
         message_dict = dict()
-
-        IM_ACTIVE = False
         
         try:
             message_dict = json.loads(message)
@@ -87,6 +88,7 @@ def handle_client(conn, addr):
 
 
         if message_dict["type"] == NORMAL_MESSAGE:
+            IM_ACTIVE = False
             if message_dict["content"]["message"] == CONNECT_MESSAGE:
                 connect((SERVER, 5051))
             elif message_dict["content"]["message"] == DISCONNECT_MESSAGE:
@@ -168,6 +170,7 @@ async def keep_inputting():
         sendMessage_info = json.dumps(message_info)
 
         await send_message(sendMessage_info)
+        print(SHARED_DIFFIE_KEY)
 
         if sendMessage == DISCONNECT_MESSAGE:
             break

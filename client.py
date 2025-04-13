@@ -25,6 +25,7 @@ GENERATOR = 3
 PRIME = 11
 ORDER = 5
 KEY = 4
+global SHARED_DIFFIE_KEY
 SHARED_DIFFIE_KEY = 0
 
 client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -49,6 +50,8 @@ def send(message):
 
 
 def handle_server(conn, addr):
+    global SHARED_DIFFIE_KEY
+    global IM_ACTIVE
     print(f"[NEW CONNECTION] {addr} connected to server.")
 
     connected = True
@@ -64,8 +67,6 @@ def handle_server(conn, addr):
         #     connected = False
 
         message_dict = dict()
-
-        IM_ACTIVE = False
         
         try:
             message_dict = json.loads(message)
@@ -73,6 +74,7 @@ def handle_server(conn, addr):
             continue
 
         if message_dict["type"] == NORMAL_MESSAGE:
+            IM_ACTIVE = False
             if message_dict["content"]["message"] == DISCONNECT_MESSAGE:
                 connected = False
                 client_chatter.close()
@@ -156,6 +158,7 @@ async def keep_inputting():
         sendMessage_info = json.dumps(message_info)
 
         await send_message(sendMessage_info)
+        print(SHARED_DIFFIE_KEY)
 
         if sendMessage == DISCONNECT_MESSAGE:
             break
