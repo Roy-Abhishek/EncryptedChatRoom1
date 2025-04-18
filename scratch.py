@@ -1,4 +1,4 @@
-from Functionality.enigma import Enigma
+from Enigma.enigma import Enigma
 
 string = "Hello my name is"
 

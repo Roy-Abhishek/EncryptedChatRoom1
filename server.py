@@ -2,6 +2,8 @@ import socket
 import threading
 import asyncio
 import json
+from kdf import kdf
+from Enigma.enigma import Enigma
 
 FORMAT = "utf-8"
 HEADER = 1024
@@ -14,19 +16,23 @@ CONNECT_MESSAGE = "!CONNECT"
 START_DIFFIE_HELLMAN = "!START_DIFFIE_HELLMAN"
 END_DIFFIE_HELLMAN = "!END_DIFFIE_HELLMAN"
 
-global IM_ACTIVE
+# global IM_ACTIVE
 IM_ACTIVE = False
-global OLD_ROOT_KEY
-OLD_ROOT_KEY = "initial"
-global IS_FIRST_MESSAGE
+# global OLD_ROOT_KEY
+OLD_ROOT_KEY = "initial_root"
+OLD_CHAIN_KEY = "initial_chain"
+# global IS_FIRST_MESSAGE
 IS_FIRST_MESSAGE = True
+USER_CHANGED = False
 
 GENERATOR = 3
 PRIME = 11
 ORDER = 5
 KEY = 3
-global SHARED_DIFFIE_KEY
+# global SHARED_DIFFIE_KEY
 SHARED_DIFFIE_KEY = 0
+
+MAIN_MESSAGE = ""
 
 # Sets up and binds the server that listens for chats from the client
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -63,6 +69,7 @@ def connect(addr):
 def handle_client(conn, addr):
     global SHARED_DIFFIE_KEY
     global IM_ACTIVE
+    global USER_CHANGED
     print(f"[NEW CONNECTION] {addr} connected to client.")
 
     connected = True
@@ -95,8 +102,15 @@ def handle_client(conn, addr):
                 connected = False
                 server_chatter.close()
 
-            print(f"[{addr}] {message_dict["content"]["message"]}")
+            try:
+                main_message = decrypt(message_dict["content"]["message"])
+            except:
+                main_message = message_dict["content"]["message"]
+
+            print(f"[{addr}] {message_dict["content"]["message"]} :: {main_message}")
+            USER_CHANGED = False
         elif message_dict["type"] == START_DIFFIE_HELLMAN:
+            USER_CHANGED = True
             SHARED_DIFFIE_KEY = (int(message_dict["content"]["diffie_value"]) ** KEY ) % int(message_dict["content"]["prime"])
             print(message_dict)
 
@@ -105,11 +119,72 @@ def handle_client(conn, addr):
             SHARED_DIFFIE_KEY = (int(message_dict["content"]["diffie_value"]) ** KEY ) % int(message_dict["content"]["prime"])
             print(message_dict)
             print("DONE WITH THE TRANSACTION")
+            print("This is the message: ", MAIN_MESSAGE)
+
+            asyncio.run(send_encrypted_message())
 
 
 
 
     conn.close()
+
+
+def encrypt():
+    global IM_ACTIVE
+    global OLD_ROOT_KEY
+    global OLD_CHAIN_KEY
+    global SHARED_DIFFIE_KEY
+    global USER_CHANGED
+    global MAIN_MESSAGE
+
+    if USER_CHANGED:
+        (root_key, chain_key, setting1_key, setting2_key, setting3_key) = kdf(OLD_ROOT_KEY, SHARED_DIFFIE_KEY)
+        OLD_ROOT_KEY = root_key
+        OLD_CHAIN_KEY = chain_key
+
+        enigma = Enigma()
+        code = enigma.encode(MAIN_MESSAGE, setting1_key % 26 + 1, setting2_key % 26 + 1, setting3_key % 26 + 1)
+
+        return code
+    
+    else:
+        (root_key, chain_key, setting1_key, setting2_key, setting3_key) = kdf(OLD_CHAIN_KEY, SHARED_DIFFIE_KEY)
+
+        OLD_CHAIN_KEY = chain_key
+
+        enigma = Enigma()
+        code = enigma.encode(MAIN_MESSAGE, setting1_key % 26 + 1, setting2_key % 26 + 1, setting3_key % 26 + 1)
+
+        return code
+    
+
+def decrypt(message):
+    global IM_ACTIVE
+    global OLD_ROOT_KEY
+    global OLD_CHAIN_KEY
+    global SHARED_DIFFIE_KEY
+    global USER_CHANGED
+    global MAIN_MESSAGE
+
+    enigma = Enigma()
+
+    if USER_CHANGED:
+        (root_key, chain_key, setting1_key, setting2_key, setting3_key) = kdf(OLD_ROOT_KEY, SHARED_DIFFIE_KEY)
+        OLD_ROOT_KEY = root_key
+        OLD_CHAIN_KEY = chain_key
+
+        code = enigma.encode(message, setting1_key % 26 + 1, setting2_key % 26 + 1, setting3_key % 26 + 1)
+
+        return code
+    
+    else:
+        (root_key, chain_key, setting1_key, setting2_key, setting3_key) = kdf(OLD_CHAIN_KEY, SHARED_DIFFIE_KEY)
+
+        OLD_CHAIN_KEY = chain_key
+
+        code = enigma.encode(message, setting1_key % 26 + 1, setting2_key % 26 + 1, setting3_key % 26 + 1)
+
+        return code
 
 
 
@@ -155,24 +230,42 @@ async def async_input(prompt):
 async def send_message(message):
     await asyncio.to_thread(send, message)
 
+async def send_encrypted_message():
+    encrypted_message = encrypt()
+
+    message_info = dict()
+    message_info["type"] = NORMAL_MESSAGE
+    message_info["content"] = {"message": encrypted_message}
+
+    sendMessage_info = json.dumps(message_info)
+
+    await send_message(sendMessage_info)
+
+
 async def keep_inputting():
     global IM_ACTIVE
+    global MAIN_MESSAGE
+    global USER_CHANGED
     while True:
-        sendMessage = await async_input("")
+        MAIN_MESSAGE = await async_input("")
         if not IM_ACTIVE:
             IM_ACTIVE = True
+            USER_CHANGED = True
             await start_diffie_hellman()
+            
+        else:
+            USER_CHANGED = False
 
-        message_info = dict()
-        message_info["type"] = NORMAL_MESSAGE
-        message_info["content"] = {"message": sendMessage}
+            await send_encrypted_message()
+            # message_info = dict()
+            # message_info["type"] = NORMAL_MESSAGE
+            # message_info["content"] = {"message": MAIN_MESSAGE}
 
-        sendMessage_info = json.dumps(message_info)
+            # sendMessage_info = json.dumps(message_info)
 
-        await send_message(sendMessage_info)
-        print(SHARED_DIFFIE_KEY)
+            # await send_message(sendMessage_info)
 
-        if sendMessage == DISCONNECT_MESSAGE:
+        if MAIN_MESSAGE == DISCONNECT_MESSAGE:
             break
 
 # This is the asynchronous function that runs the chat room.

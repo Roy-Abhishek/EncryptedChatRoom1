@@ -1,7 +1,7 @@
 from hash import my_hash
 
 def kdf(message, salt, iterations=5):
-    combined_string = message + str(salt)
+    combined_string = str(message) + str(salt)
 
     for _ in range(iterations):
         combined_string = str(my_hash(combined_string))
