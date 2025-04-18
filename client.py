@@ -87,7 +87,7 @@ def handle_server(conn, addr):
                 client_chatter.close()
 
             try:
-                main_message = decrypt(message_dict["content"]["message"])
+                main_message = " ".join(decrypt(message_dict["content"]["message"]).split(" ")[3:]) # removes the "try breaking this" at the start
             except:
                 main_message = message_dict["content"]["message"]
 
@@ -125,7 +125,7 @@ def encrypt():
         OLD_ROOT_KEY = root_key
         OLD_CHAIN_KEY = chain_key
 
-        code = enigma.encode(MAIN_MESSAGE, setting1_key % 26 + 1, setting2_key % 26 + 1, setting3_key % 26 + 1)
+        code = enigma.encode("try breaking this " + MAIN_MESSAGE, setting1_key % 26 + 1, setting2_key % 26 + 1, setting3_key % 26 + 1)
 
         return code
     
@@ -134,7 +134,7 @@ def encrypt():
 
         OLD_CHAIN_KEY = chain_key
 
-        code = enigma.encode(MAIN_MESSAGE, setting1_key % 26 + 1, setting2_key % 26 + 1, setting3_key % 26 + 1)
+        code = enigma.encode("try breaking this " + MAIN_MESSAGE, setting1_key % 26 + 1, setting2_key % 26 + 1, setting3_key % 26 + 1)
 
         return code
 
